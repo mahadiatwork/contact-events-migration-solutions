@@ -152,6 +152,9 @@ export default function ClearActivityModal({
       onClose={handleClose}
       aria-labelledby="modal-title"
       aria-describedby="modal-description"
+      maxWidth="md" // Set a maximum width
+      fullWidth // Ensures the dialog takes up the full width of the container
+      scroll="paper" // Adds scrolling if content exceeds the dialog height
     >
       {selectedRowData === null ? (
         <DialogContent>{/* <CircularProgress /> */}</DialogContent>
@@ -159,7 +162,7 @@ export default function ClearActivityModal({
         <>
           <DialogTitle id="modal-title">Clear Activity</DialogTitle>
           <form onSubmit={handleSubmit}>
-            <DialogContent>
+            <DialogContent dividers>
               <Typography variant="subtitle1">
                 <strong>Type:</strong> {selectedRowData?.Type_of_Activity}
               </Typography>
@@ -272,12 +275,12 @@ export default function ClearActivityModal({
                 fullWidth
                 label="Activity Details"
                 value={activityDetails}
-                onChange={handleActivityDetailsChange} // Allow editing
+                onChange={handleActivityDetailsChange}
                 margin="dense"
                 multiline
                 minRows={4}
                 size="small"
-                disabled={!addActivityToHistory} // Disable if not checked
+                disabled={!addActivityToHistory}
               />
             </DialogContent>
 

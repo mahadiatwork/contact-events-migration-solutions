@@ -49,7 +49,7 @@ function calculateRemindAt(reminderText, startDateTime) {
   // Calculate the amount of time to subtract based on Reminder_Text
   switch (reminderText) {
     case "At time of meeting":
-      startDate.setMinutes(startDate.getMinutes());; // No change
+      startDate.setMinutes(startDate.getMinutes()); // No change
       break;
     case "5 minutes before":
       startDate.setMinutes(startDate.getMinutes() - 5);
@@ -401,12 +401,15 @@ const CreateActivityModal = ({
   return (
     <Box
       sx={{
-        position: "absolute",
+        position: "fixed",
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
-        width: 600,
-        bgcolor: "background.paper",
+        width: "90%", // Updated to take up 90% of the screen width
+        maxWidth: "800px", // Max width limit
+        maxHeight: "90vh", // Max height limit to fit within viewport
+        overflowY: "auto", // Add vertical scrolling for overflow content
+        bgcolor: "white",
         border: "2px solid #000",
         boxShadow: 24,
         p: 2,

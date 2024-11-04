@@ -18,13 +18,19 @@ function App() {
   const [cache, setCache] = useState({}); // Cache to store fetched results
   const [recentColors, setRecentColor] = useState(""); // Move this to context
   const [loggedInUser, setLoggedInUser] = useState(null);
+  const [entityId, setEntityId] = useState(null);
 
   useEffect(() => {
+
+    ZOHO.embeddedApp.on("PageLoad", async function (data) {
+      setEntityId(data.EntityId)
+    })
     // Initialize Zoho Embedded App once
     ZOHO.embeddedApp.init().then(() => {
       setZohoLoaded(true);
       // Fetch the logged-in user
       ZOHO.CRM.CONFIG.getCurrentUser().then(function (data) {
+        console.log({data})
         setLoggedInUser(data?.users[0]);
       });
     });
@@ -81,74 +87,20 @@ function App() {
             closeDate1 = new Date(); // Up to current date
           }
 
-          // Format the dates to YYYY-MM-DDTHH:MM:SS+Timezone
-          const formattedBeginDate = `${beginDate1.getFullYear()}-${String(
-            beginDate1.getMonth() + 1
-          ).padStart(2, "0")}-${String(beginDate1.getDate()).padStart(
-            2,
-            "0"
-          )}T00:00:00+11:00`;
-          const formattedCloseDate = `${closeDate1.getFullYear()}-${String(
-            closeDate1.getMonth() + 1
-          ).padStart(2, "0")}-${String(closeDate1.getDate()).padStart(
-            2,
-            "0"
-          )}T23:59:59+11:00`;
-
-          // Custom event search with dynamic dates
-          const req_data_meetings1 = {
-            url: `https://www.zohoapis.com.au/crm/v3/Events/search?criteria=((Start_DateTime:greater_equal:${encodeURIComponent(
-              formattedBeginDate
-            )})and(End_DateTime:less_equal:${encodeURIComponent(
-              formattedCloseDate
-            )}))`,
-            method: "GET",
-            param_type: 1,
-          };
-
-          // Fetching data with custom search criteria
-          const data1 = await ZOHO.CRM.CONNECTION.invoke(
-            "zoho_crm_conn",
-            req_data_meetings1
-          );
-          const eventsData = data1?.details?.statusMessage?.data || [];
-
+          console.log({entityIdbeforeFetching: entityId})
           // Fetch all meetings
-          const allMeetings = await ZOHO.CRM.API.getAllRecords({
-            Entity: "Events",
-            sort_order: "asc",
-            per_page: 100,
+          const allMeetings = await ZOHO.CRM.API.getRelatedRecords({
+            Entity: "Contacts",
+            RecordID: entityId,
+            RelatedList: "Invited_Events",
             page: 1,
+            per_page: 200,
           });
 
           const allMeetingsData = allMeetings?.data || [];
 
-          // Combine both arrays (eventsData and allMeetingsData)
-          const combinedEvents = [...eventsData, ...allMeetingsData];
-
-          // Deduplicate based on id using a Map
-          const uniqueEventsMap = new Map(
-            combinedEvents.map((event) => [event.id, event])
-          );
-
-          // Convert the Map back to an array
-          const uniqueEvents = Array.from(uniqueEventsMap.values());
-
-          // Sort by Created_Time (latest first)
-          const sortedUniqueEvents = uniqueEvents.sort((a, b) => {
-            const dateA = new Date(a.Created_Time);
-            const dateB = new Date(b.Created_Time);
-            return dateB - dateA; // Sort in descending order (latest first)
-          });
-
-          // Store the sorted, deduplicated data in the cache
-          setCache((prevCache) => ({
-            ...prevCache,
-            [filterDate]: sortedUniqueEvents, // Cache the data for the current filterDate
-          }));
-
-          // Set the events state
-          setEvents(sortedUniqueEvents);
+          // // Set the events state
+          setEvents(allMeetingsData);
 
           // Get organization variable
           await ZOHO.CRM.API.getOrgVariable("recent_colors").then(function (

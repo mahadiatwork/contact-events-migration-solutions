@@ -19,7 +19,6 @@ import SecondComponent from "./SecondComponent";
 import ThirdComponent from "./ThirdComponent";
 import CloseIcon from "@mui/icons-material/Close";
 
-
 // Helper function to format date with timezone offset
 function formatDateForRemindAt(date) {
   if (!date) return null;
@@ -146,9 +145,12 @@ function transformFormSubmission(data) {
     data?.Reminder_Text !== "" &&
     data?.Reminder_Text !== "None"
   ) {
-    const remindAt = calculateRemindAt(data?.Reminder_Text, formatDateWithOffset(data.start));
-    transformedData['Remind_At'] = remindAt;
-    transformedData['$send_notification'] = true;
+    const remindAt = calculateRemindAt(
+      data?.Reminder_Text,
+      formatDateWithOffset(data.start)
+    );
+    transformedData["Remind_At"] = remindAt;
+    transformedData["$send_notification"] = true;
   }
 
   // Explicitly remove the scheduleWith, scheduleFor, and description keys
@@ -252,23 +254,27 @@ const EditActivityModal = ({
   const handleSubmit = async () => {
     const transformedData = transformFormSubmission(formData);
     let success = true; // To track if the update is successful
-  
+
     try {
       const data = await ZOHO.CRM.API.updateRecord({
         Entity: "Events",
         APIData: transformedData,
         Trigger: ["workflow"],
       });
-  
-      if (data.data && data.data.length > 0 && data.data[0].code === "SUCCESS") {
+
+      if (
+        data.data &&
+        data.data.length > 0 &&
+        data.data[0].code === "SUCCESS"
+      ) {
         // If submission is successful, set success to true
         console.log("Event updated successfully");
-  
+
         // Show success message
         setSnackbarSeverity("success");
         setSnackbarMessage("Event updated successfully.");
         setSnackbarOpen(true);
-  
+
         // Reload the page after 1 second
         setTimeout(() => {
           window.location.reload();
@@ -281,37 +287,39 @@ const EditActivityModal = ({
     } catch (error) {
       success = false; // Handle failure case
       console.error("Error submitting the form:", error);
-      
+
       // Show error message
       setSnackbarSeverity("error");
       setSnackbarMessage("Error updating event.");
       setSnackbarOpen(true);
     }
-  
+
     return success;
   };
 
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
   };
-  
 
-  console.log({selectedRowData})
+  console.log({ selectedRowData });
 
   return (
     <Box
       sx={{
-        position: "absolute",
+        position: "fixed",
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
-        width: 600,
+        width: "90%", // Updated to take up 90% of the screen width
+        maxWidth: "800px", // Max width limit
+        maxHeight: "90vh", // Max height limit to fit within viewport
+        overflowY: "auto", // Add vertical scrolling for overflow content
         bgcolor: "white",
         border: "2px solid #000",
         boxShadow: 24,
         p: 2,
         borderRadius: 5,
-        zIndex: 999
+        zIndex: 999,
       }}
     >
       <Box display="flex" justifyContent="space-between" mb={2}>
