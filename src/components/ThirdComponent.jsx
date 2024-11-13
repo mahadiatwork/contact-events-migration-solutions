@@ -6,40 +6,43 @@ import {
   Grid2 as Grid,
   Radio,
   RadioGroup,
-  TextField,
   Typography,
 } from "@mui/material";
-import React from "react";
-import { useState } from "react";
+import React, { useState } from "react";
+
 import { Datepicker } from "@mobiscroll/react";
 import CustomTextField from "./atom/CustomTextField";
 
 const ThirdComponent = ({ formData, handleInputChange }) => {
-  const [openDatepicker, setOpenDatepicker] = useState(false);
+  const [openStartDatepicker, setOpenStartDatepicker] = useState(false);
+  const [openEndDatepicker, setOpenEndDatepicker] = useState(false);
 
-  const customInputComponent = () => {
+  const CustomInputComponent = ({ field }) => {
     return (
       <CustomTextField
         fullWidth
         size="small"
         label=""
         variant="outlined"
-        value={formData.startTime}
-        onClick = {()=>setOpenDatepicker(true)}
-        // onChange={(e) => handleInputChange("start", e.target.value)}
+        value={formData[field]}
+        onClick={() =>
+          field === "startTime"
+            ? setOpenStartDatepicker(true)
+            : setOpenEndDatepicker(true)
+        }
       />
     );
   };
+
   return (
     <Box>
       <FormControl>
-        <FormLabel id="demo-radio-buttons-group-label">Repeat</FormLabel>
+        <FormLabel id="demo-radio-buttons-group-label">Gender</FormLabel>
         <RadioGroup
           aria-labelledby="demo-radio-buttons-group-label"
-          defaultValue="once"
           name="radio-buttons-group"
-          value={formData.repeat}
-          onChange={(e) => handleInputChange("repeat", e.target.value)}
+          value={formData.occurrence}
+          onChange={(e) => handleInputChange("occurrence", e.target.value)}
         >
           <FormControlLabel
             value="once"
@@ -75,29 +78,17 @@ const ThirdComponent = ({ formData, handleInputChange }) => {
             <Typography variant="body1" sx={{ minWidth: "80px" }}>
               Starts :
             </Typography>
-            {/* <CustomTextField
-              fullWidth
-              size="small"
-              label=""
-              variant="outlined"
-              value={formData.starts}
-              onChange={(e) => handleInputChange("start", e.target.value)}
-            /> */}
             <Datepicker
-              controls={["calendar"]}
-              select="range"
+              controls={["calendar",'time']}
+              calendarType="month"
               display="center"
-              touchUi={true}
-              
-              inputComponent={customInputComponent}
-              onClose={() => setOpenDatepicker(false)}
-              // className="mbsc-textfield"
-              // inputProps={props}
-              // maxHeight={"400px"}
-              // maxWidth={"1000px"}
-              isOpen={openDatepicker}
-              // showOnFocus={false}
-              // showOnClick={false}
+              calendarScroll={"vertical"}
+              inputComponent={() => (
+                <CustomInputComponent field="startTime" />
+              )}
+              onClose={() => setOpenStartDatepicker(false)}
+              onChange={(e) => handleInputChange("startTime", e.value)}
+              isOpen={openStartDatepicker}
             />
           </Box>
         </Grid>
@@ -106,18 +97,30 @@ const ThirdComponent = ({ formData, handleInputChange }) => {
             <Typography variant="body1" sx={{ minWidth: "80px" }}>
               Ends :
             </Typography>
-            <CustomTextField
-              fullWidth
-              size="small"
-              label=""
-              variant="outlined"
-              value={formData.ends}
-              onChange={(e) => handleInputChange("end", e.target.value)}
+            <Datepicker
+              controls={["calendar",'time']}
+              calendarType="month"
+              display="center"
+              disabled
+              calendarScroll={"vertical"}
+              inputComponent={() => (
+                <CustomInputComponent field="endTime" />
+              )}
+              onClose={() => setOpenEndDatepicker(false)}
+              onChange={(e) => handleInputChange("endTime", e.value)}
+              isOpen={openEndDatepicker}
             />
           </Box>
           <FormControlLabel
-            value="no end date"
-            control={<Radio size="small" />}
+            control={
+              <Radio
+                size="small"
+                checked={formData.noEndDate}
+                onChange={(e) =>
+                  handleInputChange("noEndDate", e.target.checked)
+                }
+              />
+            }
             label="No end date"
           />
         </Grid>

@@ -85,20 +85,26 @@ function formatDateWithOffset(dateString) {
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return null;
 
+  // Pad numbers with leading zeros
   const pad = (num) => String(num).padStart(2, "0");
 
   const year = date.getFullYear();
   const month = pad(date.getMonth() + 1);
   const day = pad(date.getDate());
-
-  // Convert to 12-hour format and determine AM/PM
-  let hours = date.getHours();
+  const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12 || 12; // Convert 0 hours to 12 for AM
+  const seconds = pad(date.getSeconds());
 
-  return `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
+  // Calculate timezone offset
+  const timezoneOffset = -date.getTimezoneOffset();
+  const offsetSign = timezoneOffset >= 0 ? "+" : "-";
+  const offsetHours = pad(Math.floor(Math.abs(timezoneOffset) / 60));
+  const offsetMinutes = pad(Math.abs(timezoneOffset) % 60);
+
+  // Return formatted date string with timezone offset
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
 }
+
 
 function transformFormSubmission(data) {
   // Function to transform scheduleWith data into the Participants format
@@ -125,11 +131,7 @@ function transformFormSubmission(data) {
     Event_Priority: data.priority, // Map `priority` to `Event_Priority`
 
     // Updated `What_Id` with both name and id from `associateWith`
-    What_Id: data.associateWith
-      ? {
-          id: data.associateWith.id || null, // Assign id from associateWith
-        }
-      : null,
+    What_Id: data.What_Id,
     se_module: "Accounts",
 
     // Combine the manually set participants and those from `scheduleWith`
@@ -191,6 +193,7 @@ const EditActivityModal = ({
   selectedRowData,
   ZOHO,
   users,
+  setEvents
 }) => {
   const theme = useTheme();
   const [value, setValue] = useState(0);
@@ -201,8 +204,8 @@ const EditActivityModal = ({
     Type_of_Activity: selectedRowData?.Type_of_Activity || "",
     start: selectedRowData?.Start_DateTime || "",
     end: selectedRowData?.End_DateTime || "",
-    Duration_Min: selectedRowData?.Duration_Min || "",
-    associateWith: selectedRowData?.What_Id || "",
+    Duration_Min: selectedRowData?.Duration_Min || "60",
+    What_Id: selectedRowData?.What_Id || "",
     scheduledWith: selectedRowData?.Participants
       ? selectedRowData.Participants
       : [], // Map 'name' and 'participant' to create the appropriate structure for Autocomplete
@@ -210,11 +213,12 @@ const EditActivityModal = ({
     priority: selectedRowData?.Event_Priority || "",
     ringAlarm: selectedRowData?.ringAlarm || "",
     Colour: selectedRowData?.Colour || "#ff0000",
-    Regarding: selectedRowData?.Regarding || "#ff0000",
+    Regarding: selectedRowData?.Regarding || "",
     Description: selectedRowData?.Description || "",
     Banner: selectedRowData?.Banner || false,
     scheduleFor: selectedRowData?.Owner || null,
     Reminder_Text: selectedRowData?.Reminder_Text || null,
+    reminder: selectedRowData.$send_notification || false,
   });
 
   const [isSnackbarOpen, setSnackbarOpen] = useState(false);
@@ -250,71 +254,59 @@ const EditActivityModal = ({
       [field]: value,
     }));
   };
+const handleSubmit = async () => {
+  const transformedData = transformFormSubmission(formData);
+  try {
+    const data = await ZOHO.CRM.API.updateRecord({
+      Entity: "Events",
+      APIData: transformedData,
+      Trigger: ["workflow"],
+    });
 
-  const handleSubmit = async () => {
-    const transformedData = transformFormSubmission(formData);
-    let success = true; // To track if the update is successful
-
-    try {
-      const data = await ZOHO.CRM.API.updateRecord({
-        Entity: "Events",
-        APIData: transformedData,
-        Trigger: ["workflow"],
-      });
-
-      if (
-        data.data &&
-        data.data.length > 0 &&
-        data.data[0].code === "SUCCESS"
-      ) {
-        // If submission is successful, set success to true
-        console.log("Event updated successfully");
-
-        // Show success message
-        setSnackbarSeverity("success");
-        setSnackbarMessage("Event updated successfully.");
-        setSnackbarOpen(true);
-
-        // Reload the page after 1 second
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      } else {
-        // If submission fails, set success to false
-        success = false;
-        throw new Error("Failed to update event");
-      }
-    } catch (error) {
-      success = false; // Handle failure case
-      console.error("Error submitting the form:", error);
-
-      // Show error message
-      setSnackbarSeverity("error");
-      setSnackbarMessage("Error updating event.");
+    if (data.data && data.data.length > 0 && data.data[0].code === "SUCCESS") {
+      setSnackbarSeverity("success");
+      setSnackbarMessage("Event updated successfully.");
       setSnackbarOpen(true);
-    }
 
-    return success;
-  };
+      // Ensure updateEvent always receives the latest associateWith value
+      setEvents((prevEvents) =>
+        prevEvents.map((event) =>
+          event.id === formData.id ? { ...event, ...formData } : event
+        )
+      );
+
+      setTimeout(() => {
+        // window.location.reload(); 
+        handleClose()
+      }, 1000);
+    } else {
+      throw new Error("Failed to update event");
+    }
+  } catch (error) {
+    console.log(error)
+    setSnackbarSeverity("error");
+    setSnackbarMessage("Error updating event.");
+    setSnackbarOpen(true);
+  }
+};
 
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
   };
 
-  console.log({ selectedRowData });
+
+  console.log({selectedRowData})
+  
 
   return (
     <Box
       sx={{
-        position: "fixed",
+        position: "absolute",
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
-        width: "90%", // Updated to take up 90% of the screen width
-        maxWidth: "800px", // Max width limit
-        maxHeight: "90vh", // Max height limit to fit within viewport
-        overflowY: "auto", // Add vertical scrolling for overflow content
-        bgcolor: "white",
+        width: 750,
+        bgcolor: "background.paper",
         border: "2px solid #000",
         boxShadow: 24,
         p: 2,

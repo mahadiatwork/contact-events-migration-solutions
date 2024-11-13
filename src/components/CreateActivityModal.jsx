@@ -17,6 +17,12 @@ import FirstComponent from "./FirstComponent";
 import SecondComponent from "./SecondComponent";
 import ThirdComponent from "./ThirdComponent";
 import CloseIcon from "@mui/icons-material/Close";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+dayjs.extend(utc);  
+dayjs.extend(timezone);
+
 
 // Helper function to format date with timezone offset
 function formatDateForRemindAt(date) {
@@ -49,7 +55,7 @@ function calculateRemindAt(reminderText, startDateTime) {
   // Calculate the amount of time to subtract based on Reminder_Text
   switch (reminderText) {
     case "At time of meeting":
-      startDate.setMinutes(startDate.getMinutes()); // No change
+      startDate.setMinutes(startDate.getMinutes());; // No change
       break;
     case "5 minutes before":
       startDate.setMinutes(startDate.getMinutes() - 5);
@@ -84,21 +90,8 @@ function formatDateWithOffset(dateString) {
   console.log({ dateString });
   if (!dateString) return null;
 
-  // Split the date string into date and time parts
-  const [datePart, timePart, ampm] = dateString.split(" ");
-  const [day, month, year] = datePart.split("/").map(Number);
-  let [hours, minutes] = timePart.split(":").map(Number);
-
-  // Convert 12-hour format to 24-hour format
-  if (ampm === "PM" && hours < 12) {
-    hours += 12;
-  } else if (ampm === "AM" && hours === 12) {
-    hours = 0; // Handle midnight
-  }
-
-  // Create the date object using the parsed values
-  const date = new Date(year, month - 1, day, hours, minutes);
-
+  // Parse the date string using JavaScript's Date constructor
+  const date = new Date(dateString);
   if (isNaN(date.getTime())) return null;
 
   // Helper function to pad numbers with leading zeros
@@ -121,6 +114,7 @@ function formatDateWithOffset(dateString) {
   // Return formatted date string with timezone offset
   return `${formattedYear}-${formattedMonth}-${formattedDay}T${formattedHours}:${formattedMinutes}:${formattedSeconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
 }
+
 
 function transformFormSubmission(data, individualParticipant = null) {
   const transformScheduleWithToParticipants = (scheduleWith) => {
@@ -157,7 +151,7 @@ function transformFormSubmission(data, individualParticipant = null) {
       ? `${data.Event_Title} - ${individualParticipant.Full_Name}`
       : data.Event_Title, // If no individual participant, use the default title
 
-    What_Id: data.associateWith?.id ? { id: data.associateWith.id } : null,
+    What_Id: data.What_Id,
     se_module: "Accounts",
     Participants: participants,
     Duration_Min: data.Duration_Min ? data.Duration_Min.toString() : "0",
@@ -178,6 +172,11 @@ function transformFormSubmission(data, individualParticipant = null) {
     transformedData["Remind_At"] = remindAt;
     transformedData["$send_notification"] = true;
   }
+
+  // if (
+  //   transformedData.Recurring_Activity.RRULE ==="FREQ=ONCE;INTERVAL=1;UNTIL=Invalid Date;DTSTART=Invalid Date") {
+  //   delete transformedData.Recurring_Activity;
+  // }
 
   const keysToRemove = [
     "scheduledWith",
@@ -217,17 +216,20 @@ const CreateActivityModal = ({
   users,
   loggedInUser,
   setEvents,
+  setSelectedRowIndex,
+  setHighlightedRow
 }) => {
   const theme = useTheme();
   const [value, setValue] = useState(0);
+
   const [formData, setFormData] = useState({
-    Type_of_Activity: "",
+    Type_of_Activity: "Meeting",
     startTime: "",
-    endTime: "",
+    endTime: 60,
     duration: "",
-    associateWith: "",
-    Event_Title: "",
-    resource: 0,
+    What_Id: "",
+    Event_Title: "New Meeting",
+    resource: 1,
     scheduleFor: loggedInUser || "",
     scheduledWith: [],
     Venue: "",
@@ -239,7 +241,7 @@ const CreateActivityModal = ({
     Description: "",
     color: "#fff",
     Regarding: "",
-    Duration_Min: "",
+    Duration_Min: 60,
     Create_Separate_Event_For_Each_Contact: false,
     Reminder_Text: "None",
   });
@@ -249,17 +251,19 @@ const CreateActivityModal = ({
       Type_of_Activity,
       start, // Use raw formData fields
       end,
-      Duration_Min,
+      duration,
       Event_Title,
       scheduledWith, // scheduledWith instead of Participants
     } = formData;
+
+    console.log({formData})
 
     // Ensure all required fields are not empty or null
     return (
       Type_of_Activity &&
       start &&
       end &&
-      Duration_Min &&
+      duration &&
       Event_Title &&
       scheduledWith.length > 0
     );
@@ -304,9 +308,8 @@ const CreateActivityModal = ({
 
   const handleSubmit = async () => {
     setIsSubmitting(true); // Start the submission process
-
-    let success = true; // To track if all events are created successfully
-
+    let success = true;
+  
     if (formData.Create_Separate_Event_For_Each_Contact) {
       // Handle creating separate events for each participant
       for (let participant of formData.scheduledWith) {
@@ -317,37 +320,31 @@ const CreateActivityModal = ({
             APIData: transformedData,
             Trigger: ["workflow"],
           });
-
-          if (
-            data.data &&
-            data.data.length > 0 &&
-            data.data[0].code === "SUCCESS"
-          ) {
-            const createdEvent = data.data[0].details; // Get the newly created event
-            // Append the created event to the events state
-            setEvents((prevEvents) => [createdEvent, ...prevEvents]);
-            console.log(
-              `Event Created Successfully for ${participant.Full_Name}`
-            );
+  
+          if (data.data && data.data.length > 0 && data.data[0].code === "SUCCESS") {
+            const createdEvent = data.data[0].details;
+            setEvents((prev) => [
+              { ...transformedData, id: data?.data[0].details?.id },
+              ...prev,
+            ]);
+            setSelectedRowIndex(data?.data[0].details?.id)
+            setHighlightedRow(data?.data[0].details?.id)
+            setSnackbarSeverity("success");
+            setSnackbarMessage("Event Created Successfully");
+            setSnackbarOpen(true);
           } else {
-            success = false; // If any event fails, mark success as false
+            success = false;
             throw new Error("Failed to create event");
           }
         } catch (error) {
-          success = false; // Handle error for each participant
+          success = false;
           setSnackbarSeverity("error");
           setSnackbarMessage("Error creating events.");
           setSnackbarOpen(true);
         }
-      }
-
-      if (success) {
-        setSnackbarSeverity("success");
-        setSnackbarMessage("Events Created Successfully");
-        setSnackbarOpen(true);
-
         setTimeout(() => {
-          window.location.reload(); // Reload after 1 second
+          // window.location.reload();
+          handleClose() 
         }, 1000);
       }
     } else {
@@ -359,22 +356,21 @@ const CreateActivityModal = ({
           APIData: transformedData,
           Trigger: ["workflow"],
         });
-
-        if (
-          data.data &&
-          data.data.length > 0 &&
-          data.data[0].code === "SUCCESS"
-        ) {
-          const createdEvent = data.data[0].details; // Get the newly created event
-          // Append the created event to the events state
-          setEvents((prevEvents) => [...prevEvents, createdEvent]);
-
+  
+        if (data.data && data.data.length > 0 && data.data[0].code === "SUCCESS") {
+          const createdEvent = data.data[0].details;
+          setEvents((prev) => [
+            { ...transformedData, id: data?.data[0].details?.id },
+            ...prev,
+          ]);
+          setSelectedRowIndex(data?.data[0].details?.id)
+            setHighlightedRow(data?.data[0].details?.id)
           setSnackbarSeverity("success");
           setSnackbarMessage("Event Created Successfully");
           setSnackbarOpen(true);
-
           setTimeout(() => {
-            window.location.reload(); // Reload after 1 second
+            // window.location.reload(); 
+            handleClose()
           }, 1000);
         } else {
           throw new Error("Failed to create event");
@@ -386,30 +382,29 @@ const CreateActivityModal = ({
         setSnackbarOpen(true);
       }
     }
-
+  
     setIsSubmitting(false);
   };
-
+  
   // Validate form data whenever it changes
   React.useEffect(() => {
     const data = isFormValid();
+    console.log({isFormValid: data})
     // setIsSubmitEnabled(isFormValid());
   }, [formData]); // Effect runs whenever formData changes
 
-  console.log({ formData });
 
+  console.log("clear", loggedInUser)
+  
   return (
     <Box
       sx={{
-        position: "fixed",
+      position: "absolute",
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
-        width: "90%", // Updated to take up 90% of the screen width
-        maxWidth: "800px", // Max width limit
-        maxHeight: "90vh", // Max height limit to fit within viewport
-        overflowY: "auto", // Add vertical scrolling for overflow content
-        bgcolor: "white",
+        width: 750,
+        bgcolor: "background.paper",
         border: "2px solid #000",
         boxShadow: 24,
         p: 2,

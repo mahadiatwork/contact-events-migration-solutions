@@ -1,14 +1,9 @@
-import {
-  Autocomplete,
-  TextField,
-  Box,
-  Typography,
-} from "@mui/material";
+import { Autocomplete, TextField, Box, Typography } from "@mui/material";
 import React, { useState, useEffect } from "react";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
 export default function ContactField({
-  value,
+  formData,
   handleInputChange,
   ZOHO,
   selectedRowData,
@@ -21,9 +16,16 @@ export default function ContactField({
   const [notFoundMessage, setNotFoundMessage] = useState("");
   const [loading, setLoading] = useState(false); // Loading state for search
 
-  // Sync selectedParticipants with value and selectedRowData
+  // Sync selectedParticipants with formData.scheduledWith or selectedRowData on mount
   useEffect(() => {
-    if (selectedRowData?.Participants?.length > 0) {
+    console.log({formData})
+    if (formData.scheduledWith && formData.scheduledWith.length > 0) {
+      const initialParticipants = formData.scheduledWith.map((contact) => ({
+        Full_Name: contact.Full_Name || contact.name,
+        id: contact.participant,
+      }));
+      setSelectedParticipants(initialParticipants);
+    } else if (selectedRowData?.Participants?.length > 0) {
       const defaultParticipants = selectedRowData.Participants.map(
         (participant) => ({
           Full_Name: participant.name,
@@ -32,7 +34,7 @@ export default function ContactField({
       );
       setSelectedParticipants(defaultParticipants);
     }
-  }, [selectedRowData, contacts]);
+  }, [formData.scheduledWith, selectedRowData]);
 
   const handleSearch = async (query) => {
     setNotFoundMessage(""); // Reset the message
@@ -52,7 +54,10 @@ export default function ContactField({
             id: contact.id,
           }));
 
-          const mergedContacts = [...formattedContacts, ...selectedParticipants];
+          const mergedContacts = [
+            ...formattedContacts,
+            ...selectedParticipants,
+          ];
           const uniqueContacts = mergedContacts.filter(
             (contact, index, self) =>
               index === self.findIndex((c) => c.id === contact.id)
@@ -65,7 +70,9 @@ export default function ContactField({
         }
       } catch (error) {
         console.error("Error during search:", error);
-        setNotFoundMessage("An error occurred while searching. Please try again.");
+        setNotFoundMessage(
+          "An error occurred while searching. Please try again."
+        );
       } finally {
         setLoading(false); // End loading
       }
@@ -96,7 +103,9 @@ export default function ContactField({
     );
   };
 
-  console.log({selectedRowDataRT: selectedRowData})
+
+  console.log({selectedParticipants})
+
   return (
     <Box>
       <Autocomplete

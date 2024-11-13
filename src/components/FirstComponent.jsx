@@ -19,7 +19,10 @@ import { ChromePicker, SketchPicker } from "react-color";
 import { Datepicker } from "@mobiscroll/react";
 import RegardingField from "./atom/RegardingField";
 import { ZohoContext } from "../App";
-import CustomColorPicker from "./atom/CustomColorPicker"
+import CustomColorPicker from "./atom/CustomColorPicker";
+import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
 
 const parseDateString = (dateString) => {
   const [datePart, timePart, ampm] = dateString.split(" "); // Split date and time
@@ -41,6 +44,8 @@ const parseDateString = (dateString) => {
 const formatTime = (date) => {
   const newDate = new Date(date);
 
+  console.log({ formatTime: newDate });
+
   const year = newDate.getFullYear();
   const month = String(newDate.getMonth() + 1).padStart(2, "0");
   const day = String(newDate.getDate()).padStart(2, "0");
@@ -51,7 +56,24 @@ const formatTime = (date) => {
   const ampm = hours >= 12 ? "PM" : "AM";
   hours = hours % 12 || 12; // Convert 0 hours to 12 for AM
 
+  console.log({
+    formattedTime: `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`,
+  });
+
   return `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
+};
+
+const formatTimeForBanner = (date, hour) => {
+  const newDate = new Date(date);
+  newDate.setHours(hour, 0, 0, 0);
+  // Manually format the date in YYYY-MM-DDTHH:mm without converting to UTC
+  const year = newDate.getFullYear();
+  const month = String(newDate.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+  const day = String(newDate.getDate()).padStart(2, "0");
+  const hours = String(newDate.getHours()).padStart(2, "0");
+  const minutes = String(newDate.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 // Helper to calculate duration between two dates in minutes, rounded to the nearest 10
@@ -103,8 +125,53 @@ const FirstComponent = ({
     { type: "Vacation", resource: 16 },
   ]);
 
+  function addMinutesToDateTime(formatType, durationInMinutes) {
+    // // Create a new Date object using the start time from formData
+    // console.log(formatType,durationInMinutes)
+    if (formatType === "Duration_Min") {
+      let date = new Date(formData.start);
+
+      date.setMinutes(date.getMinutes() + parseInt(durationInMinutes, 10));
+      const localDate = new Date(
+        date.getTime() - date.getTimezoneOffset() * 60000
+      );
+
+      const modifiedDate = localDate.toISOString().slice(0, 16);
+
+      handleInputChange("end", modifiedDate);
+      setEndValue(dayjs(modifiedDate));
+    } else {
+      let date = new Date(formData.start);
+
+      date.setMinutes(
+        date.getMinutes() - parseInt(durationInMinutes.value, 10)
+      );
+
+      const localDate = new Date(
+        date.getTime() - date.getTimezoneOffset() * 60000
+      );
+
+      const modifiedDate = localDate.toISOString().slice(0, 16);
+
+      handleInputChange("Remind_At", modifiedDate);
+      handleInputChange("Reminder_Text", durationInMinutes.name);
+    }
+  }
+
   useEffect(() => {
-    if (selectedRowData) {
+    const initializeDefaultValues = () => {
+      const now = new Date();
+      const oneHourLater = new Date(now);
+      oneHourLater.setHours(now.getHours() + 1);
+
+      handleInputChange("start", now.toISOString());
+      handleInputChange("end", oneHourLater.toISOString());
+      handleInputChange("duration", 60); // Default duration of 60 minutes
+      setStartValue(dayjs(now));
+      setEndValue(dayjs(oneHourLater));
+    };
+
+    const initializeSelectedRowData = () => {
       handleInputChange("Reminder_Text", selectedRowData.Reminder_Text || "");
       handleInputChange("Event_Title", selectedRowData.Event_Title || "");
       handleInputChange(
@@ -113,38 +180,41 @@ const FirstComponent = ({
       );
 
       const formattedStart = selectedRowData.Start_DateTime
-        ? formatTime(selectedRowData.Start_DateTime)
-        : "";
+        ? new Date(selectedRowData.Start_DateTime)
+        : null;
       const formattedEnd = selectedRowData.End_DateTime
-        ? formatTime(selectedRowData.End_DateTime)
-        : "";
+        ? new Date(selectedRowData.End_DateTime)
+        : null;
 
-      handleInputChange("start", formattedStart || "");
-      handleInputChange("end", formattedEnd || "");
-      handleInputChange(
-        "Duration_Min",
-        calculateDuration(
-          selectedRowData.Start_DateTime,
-          selectedRowData.End_DateTime
-        ) || ""
-      );
+      // Set start, end, and duration if valid times are provided
+      if (formattedStart && formattedEnd) {
+        handleInputChange("start", formattedStart.toISOString());
+        handleInputChange("end", formattedEnd.toISOString());
+        const calculatedDuration = calculateDuration(
+          formattedStart,
+          formattedEnd
+        );
+        handleInputChange(
+          "duration",
+          selectedRowData.duration || calculatedDuration
+        );
+        setStartValue(dayjs(formattedStart));
+        setEndValue(dayjs(formattedEnd));
+      } else {
+        initializeDefaultValues();
+      }
+
       handleInputChange("Venue", selectedRowData.Venue || "");
       handleInputChange("priority", selectedRowData.Event_Priority || "");
       handleInputChange("ringAlarm", selectedRowData.ringAlarm || "");
       handleInputChange("Colour", selectedRowData.Colour || "#ff0000");
       handleInputChange("Banner", selectedRowData.Banner || false);
 
-      // Find the corresponding user in the users array based on Owner's full_name
       const owner = users.find(
         (user) => user.full_name === selectedRowData.Owner?.name
       );
-      if (owner) {
-        handleInputChange("scheduleFor", owner); // Set the user object, not just the name
-      } else {
-        handleInputChange("scheduleFor", null); // Handle case where no matching user is found
-      }
+      handleInputChange("scheduleFor", owner || null);
 
-      // Populate scheduledWith
       handleInputChange(
         "scheduledWith",
         selectedRowData.Participants
@@ -155,25 +225,43 @@ const FirstComponent = ({
             }))
           : []
       );
+    };
+
+    if (!selectedRowData) {
+      initializeDefaultValues();
+    } else {
+      initializeSelectedRowData();
     }
-  }, [selectedRowData, users]); // Ensure this runs when selectedRowData or users change
+  }, [selectedRowData, users]);
 
   const [openStartDatepicker, setOpenStartDatepicker] = useState(false);
   const [openEndDatepicker, setOpenEndDatepicker] = useState(false);
   const [displayColorPicker, setDisplayColorPicker] = useState(false);
   const [color, setColor] = useState(formData.Colour || "#ff0000");
+  const [sendNotification, setSendNotification] = useState(true);
 
-  // Handle Banner checked logic
   const handleBannerChecked = (e) => {
     handleInputChange("Banner", e.target.checked);
-    if (e.target.checked) {
-      const now = new Date();
-      const timeAt6AM = formatTime(now.setHours(6, 0));
-      const timeAt7AM = formatTime(now.setHours(7, 0));
-
+    const selectedDate = formData.start;
+    console.log({ selectedDate });
+    if (selectedDate) {
+      const timeAt6AM = formatTimeForBanner(selectedDate, 6);
+      const timeAt7AM = formatTimeForBanner(selectedDate, 7);
+      // console.log("fahim", timeAt6AM, timeAt7AM);
       handleInputChange("start", timeAt6AM);
       handleInputChange("end", timeAt7AM);
-      handleInputChange("Duration_Min", 60);
+      setStartValue(dayjs(timeAt6AM));
+      setEndValue(dayjs(timeAt7AM));
+    } else {
+      const now = new Date();
+      // console.log(now);
+      const timeAt6AM = formatTimeForBanner(now, 6);
+      const timeAt7AM = formatTimeForBanner(now, 7);
+      // console.log("fahim", timeAt6AM, timeAt7AM);
+      handleInputChange("start", timeAt6AM);
+      handleInputChange("end", timeAt7AM);
+      setStartValue(dayjs(timeAt6AM));
+      setEndValue(dayjs(timeAt7AM));
     }
   };
 
@@ -237,7 +325,7 @@ const FirstComponent = ({
       handleInputChange("Duration_Min", duration);
     } else if (field === "Duration_Min") {
       const startDate = parseDateString(formData.start);
-      console.log({ start: formData.start });
+
       const newEndDate = calculateEndDate(startDate, value);
       handleInputChange("Duration_Min", value);
       handleInputChange("end", formatTime(newEndDate));
@@ -279,7 +367,34 @@ const FirstComponent = ({
     },
   };
 
-  console.log({ scheduleFor: formData.scheduleFor });
+  const durations = Array.from({ length: 24 }, (_, i) => (i + 1) * 10);
+
+  const [startValue, setStartValue] = useState(dayjs(formData.start));
+  const [endValue, setEndValue] = useState(dayjs(formData.end));
+
+  function getTimeDifference(end) {
+    const startDate = new Date(formData.start);
+    const endDate = new Date(end);
+    const diffInMs = endDate - startDate;
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    return diffInMinutes;
+  }
+
+  const handleEndDateChange = (e) => {
+    console.log("fahim", e.$d);
+    handleInputChange("end", e.$d);
+    console.log("end", e.value);
+    const getDiffInMinutes = getTimeDifference(e.$d);
+    handleInputChange("Duration_Min", getDiffInMinutes);
+    console.log({ getDiffInMinutes });
+    // if (formData.end ) {
+    //   console.log('hello')
+    // }
+  };
+
+  //  const [selectedParticipants, setSelectedParticipants] = useState(
+  //   selectedRowData?.Participants || []
+  // ); // Selected values in autocomplete
 
   return (
     <Box>
@@ -314,7 +429,7 @@ const FirstComponent = ({
         </Grid>
 
         <Grid size={4}>
-          <Datepicker
+          {/* <Datepicker
             controls={["calendar", "time"]}
             display="center"
             inputComponent={() =>
@@ -328,10 +443,30 @@ const FirstComponent = ({
             onChange={(e) => handleInputChangeWithEnd("start", e.value)} // Auto-populate end date and duration
             isOpen={openStartDatepicker}
             touchUi={true}
-          />
+          /> */}
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <DateTimePicker
+              label="Start Time"
+              value={startValue}
+              disabled={formData.Banner ? true : false}
+              slotProps={{ textField: { size: "small" } }}
+              onChange={(e) => {
+                const addedHour = new Date(dayjs(e.$d).add(1, "hour").toDate());
+                handleInputChange("start", e.$d);
+                handleInputChange("end", addedHour);
+                setEndValue(dayjs(addedHour));
+                handleInputChange("Duration_Min", 60);
+                console.log(e.$d);
+                console.log(addedHour);
+              }}
+              sx={{ "& input": { py: 0 } }}
+              renderInput={(params) => <TextField {...params} size="small" />}
+              format="DD/MM/YYYY hh:mm A" // Ensures 24-hour format for clarity
+            />
+          </LocalizationProvider>
         </Grid>
         <Grid size={4}>
-          <Datepicker
+          {/* <Datepicker
             controls={["calendar", "time"]}
             display="center"
             inputComponent={() =>
@@ -341,28 +476,59 @@ const FirstComponent = ({
             onChange={(e) => handleInputChangeWithEnd("end", e.value)} // Calculate duration when end is updated
             isOpen={openEndDatepicker}
             disabled={formData.Banner} // Disable if Banner is checked
-          />
+          /> */}
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <DateTimePicker
+              label="End Time"
+              value={endValue}
+              disabled={formData.Banner ? true : false}
+              slotProps={{ textField: { size: "small" } }}
+              onChange={(e) => handleEndDateChange(e)}
+              sx={{ "& input": { py: 0 } }}
+              renderInput={(params) => <TextField {...params} size="small" />}
+              format="DD/MM/YYYY hh:mm A" // Ensures 24-hour format for clarity
+            />
+          </LocalizationProvider>
         </Grid>
         <Grid size={4}>
-          <FormControl fullWidth size="small" sx={commonStyles}>
-            <InputLabel>Duration</InputLabel>
+          <FormControl fullWidth size="small">
+            <InputLabel
+              id="demo-simple-select-standard-label"
+              // sx={{ top: "-5px" }}
+            >
+              Duration
+            </InputLabel>
             <Select
+              labelId="demo-simple-select-standard-label"
+              id="demo-simple-select-standard"
               label="Duration"
               fullWidth
-              value={formData.Duration_Min} // Use formData
-              onChange={
-                (e) => handleInputChangeWithEnd("Duration_Min", e.target.value) // Update end date when duration is changed
-              }
-              disabled={formData.Banner} // Disable if Banner is checked
+              value={formData.Duration_Min}
+              disabled={formData.Banner ? true : false}
+              InputLabelProps={{ shrink: true }}
+              onChange={(e) => {
+                handleInputChange("Duration_Min", e.target.value);
+                addMinutesToDateTime("Duration_Min", e.target.value);
+              }}
+              sx={{
+                "& .MuiSelect-select": {
+                  padding: "4px 5px", // Adjust the padding to shrink the Select content
+                },
+                "& .MuiOutlinedInput-root": {
+                  // height: '40px', // Set a consistent height
+                  padding: "3px 0px", // Ensure no extra padding
+                },
+                "& .MuiInputBase-input": {
+                  display: "flex",
+                  alignItems: "center", // Align the content vertically
+                },
+              }}
             >
-              {Array.from({ length: 24 }, (_, index) => {
-                const minutes = (index + 1) * 10;
-                return (
-                  <MenuItem key={minutes} value={minutes}>
-                    {minutes} minutes
-                  </MenuItem>
-                );
-              })}
+              {durations.map((minute, index) => (
+                <MenuItem key={index} value={minute}>
+                  {minute} minutes
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Grid>
@@ -379,17 +545,36 @@ const FirstComponent = ({
         </Grid>
         <Grid size={12}>
           <ContactField
-            value={formData.scheduledWith} // Use formData
+            formData={formData} // Use formData
             handleInputChange={handleInputChange}
             ZOHO={ZOHO}
             selectedRowData={selectedRowData}
           />
         </Grid>
+        <Grid item xs={12} sm={6} md={2}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={!sendNotification}
+                onChange={(e) => {
+                  const isChecked = e.target.checked;
+                  setSendNotification(!isChecked); // Update sendNotification state
+                  handleInputChangeWithEnd("$send_notification", !isChecked);
+                  if (isChecked) {
+                    handleInputChange("Reminder_Text", "None"); // Set Reminder to "None"
+                  }
+                }}
+              />
+            }
+            label="Don't send notification"
+          />
+        </Grid>
         <Grid size={12}>
           <AccountField
-            value={formData.associateWith} // Use formData
+            formData={formData} // Use formData
             handleInputChange={handleInputChange}
             ZOHO={ZOHO}
+            selectedRowData={selectedRowData}
           />
         </Grid>
         <Grid size={12}>
@@ -450,10 +635,11 @@ const FirstComponent = ({
             <Select
               label="Ring Alarm"
               fullWidth
-              value={formData.Reminder_Text} // Use formData
+              value={formData.Reminder_Text || "None"} // Default to "None" if disabled
               onChange={(e) =>
                 handleInputChange("Reminder_Text", e.target.value)
               }
+              disabled={!sendNotification} // Disable if "Don't send notification" is checked
             >
               <MenuItem value="None">None</MenuItem>
               <MenuItem value="At time of meeting">At time of meeting</MenuItem>
@@ -505,7 +691,11 @@ const FirstComponent = ({
             {displayColorPicker && (
               <div style={popover}>
                 <div style={cover} />
-                <CustomColorPicker recentColors={recentColors} handleClose={handleClose} handleColorChange={handleColorChange} />
+                <CustomColorPicker
+                  recentColors={recentColors}
+                  handleClose={handleClose}
+                  handleColorChange={handleColorChange}
+                />
               </div>
             )}
           </Grid>
